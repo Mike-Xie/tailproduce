@@ -5,9 +5,9 @@
 #define TAILPRODUCE_BYTE_ORDER_H
 
 #ifdef __APPLE__
-	#include "endian.h"
+#include "endian.h"
 #else
-	#include <endian.h>
+#include <endian.h>
 #endif
 
 template <typename T> T as_msb(T);

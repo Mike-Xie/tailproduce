@@ -99,7 +99,7 @@ namespace TailProduce {
 
         // ProcessEntrySync() deserealizes the entry and calls the supplied method of the respective type.
         // TODO(dkorolev): Support polymorphic types.
-        template<typename T_PROCESSOR> void ProcessEntrySync(T_PROCESSOR processor, bool require_data = true) {
+        template <typename T_PROCESSOR> void ProcessEntrySync(T_PROCESSOR processor, bool require_data = true) {
             if (!HasData()) {
                 if (require_data) {
                     VLOG(3) << "throw ::TailProduce::ListenerHasNoDataToRead();";

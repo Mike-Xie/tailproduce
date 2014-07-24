@@ -356,7 +356,7 @@ template <typename STORAGE, typename STREAM_MANAGER> void RUN_TESTS() {
         publisher.Push(SimpleEntry(20, "twenty: ignored as part the non-included end the of range"));
         ASSERT_TRUE(!listener.HasData());
         ASSERT_TRUE(listener.ReachedEnd());
-        ASSERT_THROW(listener.ProcessEntrySync([](SimpleEntry){}), ::TailProduce::ListenerHasNoDataToRead);
+        ASSERT_THROW(listener.ProcessEntrySync([](SimpleEntry) {}), ::TailProduce::ListenerHasNoDataToRead);
         ASSERT_THROW(listener.AdvanceToNextEntry(), ::TailProduce::AttemptedToAdvanceListenerWithNoDataAvailable);
     }
 
