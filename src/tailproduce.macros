@@ -4,6 +4,7 @@
 #define TAILPRODUCE_STATIC_FRAMEWORK_BEGIN(NAME, BASE) \
     class NAME { \
       public: \
+        typedef NAME framework_type; \
         typedef typename BASE::storage_type storage_type; \
         storage_type& storage; \
         static storage_type& EnsureStreamsAreCreatedDuringInitialization( \
@@ -14,7 +15,9 @@
         } \
         NAME(storage_type& storage, \
              const ::TailProduce::StreamManagerParams& params = ::TailProduce::StreamManagerParams::FromCommandLineFlags()) \
-          : storage(EnsureStreamsAreCreatedDuringInitialization(storage, params)) {} \
+          : storage(EnsureStreamsAreCreatedDuringInitialization(storage, params)) { \
+            ::TailProduce::EnsureThereAreNoStreamsWithoutPublishers(streams_declared_, stream_publishers_declared_); \
+        } \
         NAME(const NAME&) = delete; \
         NAME(NAME&&) = delete; \
         void operator=(const NAME&) = delete; \
@@ -26,28 +29,31 @@
         static_assert(std::is_base_of<TS, storage_type>::value, \
                       "TAILPRODUCE_STATIC_FRAMEWORK_BEGIN: BASE::storage_type should be derived from Storage."); \
         ::TailProduce::StreamsRegistry registry_;  \
+        std::set<std::string> streams_declared_; \
+        std::set<std::string> stream_publishers_declared_; \
       public: \
         typedef BASE captured_base; \
         const ::TailProduce::StreamsRegistry& registry() const { return registry_; }
 
-#define TAILPRODUCE_STREAM(MANAGER, NAME, ENTRY_TYPE, ORDER_KEY_TYPE) \
+#define TAILPRODUCE_STREAM(NAME, ENTRY_TYPE, ORDER_KEY_TYPE) \
         struct NAME##_type { \
             typedef ENTRY_TYPE entry_type; \
             typedef ORDER_KEY_TYPE order_key_type; \
             typedef ::TailProduce::StreamInstance<entry_type, order_key_type> stream_type; \
             typedef typename captured_base::storage_type storage_type; \
             typedef ::TailProduce::UnsafeListener<NAME##_type> unsafe_listener_type; \
-            typedef ::TailProduce::UnsafePublisher<NAME##_type> unsafe_publisher_type; \
+            typedef ::TailProduce::INTERNAL_UnsafePublisher<NAME##_type> INTERNAL_unsafe_publisher_type; \
+            typedef ::TailProduce::Publisher<NAME##_type> publisher_type; \
             typedef std::pair<order_key_type, uint32_t> head_pair_type; \
             typedef ::TailProduce::StorageKeyBuilder<NAME##_type> key_builder_type; \
-            MANAGER* manager; \
+            framework_type* manager; \
             stream_type stream; \
             const std::string name; \
             key_builder_type key_builder; \
             head_pair_type head; \
             ::TailProduce::ConfigValues cv = ::TailProduce::ConfigValues("S", "D", "Register", "LastWrite", ':'); \
             NAME##_type( \
-                MANAGER* manager, \
+                framework_type* manager, \
                 const char* stream_name, \
                 const char* entry_type_name, \
                 const char* entry_order_key_name) \
@@ -56,9 +62,19 @@
                 name(stream_name), \
                 key_builder(name), \
                 head(::TailProduce::StreamManager::template FetchHeadOrDie<order_key_type, key_builder_type, storage_type>(name, key_builder, manager->storage)) { \
+                manager->streams_declared_.insert(#NAME); \
             } \
         }; \
         NAME##_type NAME = NAME##_type(this, #NAME, #ENTRY_TYPE, #ORDER_KEY_TYPE)
+
+#define TAILPRODUCE_PUBLISHER(NAME) \
+        struct NAME##_publisher_type : ::TailProduce::Publisher<NAME##_type> { \
+            typedef ::TailProduce::Publisher<NAME##_type> base; \
+            explicit NAME##_publisher_type(framework_type* manager) : base(manager->NAME) { \
+                manager->stream_publishers_declared_.insert(#NAME); \
+            } \
+        }; \
+        NAME##_publisher_type NAME##_publisher = NAME##_publisher_type(this);
 
 #define TAILPRODUCE_STATIC_FRAMEWORK_END() \
     }

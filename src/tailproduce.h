@@ -5,6 +5,9 @@
 
 #include <glog/logging.h>
 
+// TODO(dkorolev): Perhaps move all standard headers for TailProduce into this file?
+#include <algorithm>
+
 #include "tpexceptions.h"
 
 #include "storage.h"

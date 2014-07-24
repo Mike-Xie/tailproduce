@@ -1,11 +1,16 @@
 #ifndef TAILPRODUCE_EXCEPTIONS_H
 #define TAILPRODUCE_EXCEPTIONS_H
 
+// TODO(dkorolev): Add descriptions to each exception, perhaps as part of their respective what()-s.
+
 namespace TailProduce {
     // Exception types.
     struct Exception : std::exception {
+        std::string text;
+        explicit Exception(const std::string& text = "TailProduce Exception") : text(text) {
+        }
         virtual const char* what() const noexcept {
-            return "TailProduce Exception.";
+            return text.c_str();
         }
     };
     struct InternalError : Exception {};
@@ -22,6 +27,11 @@ namespace TailProduce {
     struct MalformedStorageHeadException : Exception {};
     struct StreamAlreadyListedForCreationException : Exception {};
     struct StreamAlreadyExistsException : Exception {};
+    struct StreamHasNoWriterDefinedException : Exception {
+        explicit StreamHasNoWriterDefinedException(const std::string& name)
+            : Exception("StreamHasNoWriterDefinedException: '" + name + "'.") {
+        }
+    };
 };
 
 #endif

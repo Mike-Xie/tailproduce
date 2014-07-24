@@ -125,6 +125,7 @@ namespace TailProduce {
         // to allow statically supporting polymorphic types.
         // DELETED_ExportEntry() populates the passed in entry object if data is available.
         // Will throw an exception if no data is available.
+        // TODO(dkorolev): Remove DELETED_ExportEntry() once the transition is completed.
         void DELETED_ExportEntry(typename T::entry_type& entry) {
             if (!HasData()) {
                 VLOG(3) << "throw ::TailProduce::ListenerHasNoDataToRead();";

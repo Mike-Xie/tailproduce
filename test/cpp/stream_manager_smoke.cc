@@ -14,7 +14,8 @@ using ::TailProduce::StreamManagerParams;
 
 TEST(StreamManagerSmokeTest, SmokeTest) {
     TAILPRODUCE_STATIC_FRAMEWORK_BEGIN(Impl, MockStreamManager<MockDataStorage>);
-    TAILPRODUCE_STREAM(Impl, test, SimpleEntry, SimpleOrderKey);
+    TAILPRODUCE_STREAM(test, SimpleEntry, SimpleOrderKey);
+    TAILPRODUCE_PUBLISHER(test);
     TAILPRODUCE_STATIC_FRAMEWORK_END();
 
     MockDataStorage storage;
@@ -30,7 +31,7 @@ TEST(StreamManagerSmokeTest, SmokeTest) {
 
         SimpleEntry entry;
 
-        typename Impl::test_type::unsafe_publisher_type publisher(streams_manager.test);
+        typename Impl::test_type::publisher_type publisher(streams_manager.test);
         typename Impl::test_type::unsafe_listener_type listener_all(streams_manager.test);
         typename Impl::test_type::unsafe_listener_type listener_from_three(streams_manager.test, SimpleOrderKey(3));
         typename Impl::test_type::unsafe_listener_type listener_from_three_to_five_not_inclusive(
@@ -160,7 +161,8 @@ TEST(StreamManagerSmokeTest, SmokeTest) {
 
 TEST(StreamManagerSmokeTest, DataInjected) {
     TAILPRODUCE_STATIC_FRAMEWORK_BEGIN(Impl, MockStreamManager<MockDataStorage>);
-    TAILPRODUCE_STREAM(Impl, foo, SimpleEntry, SimpleOrderKey);
+    TAILPRODUCE_STREAM(foo, SimpleEntry, SimpleOrderKey);
+    TAILPRODUCE_PUBLISHER(foo);
     TAILPRODUCE_STATIC_FRAMEWORK_END();
 
     MockDataStorage storage;
