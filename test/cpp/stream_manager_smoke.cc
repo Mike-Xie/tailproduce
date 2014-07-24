@@ -12,6 +12,28 @@
 using ::TailProduce::bytes;
 using ::TailProduce::StreamManagerParams;
 
+// Keep in mind that Stats and Aggregator must be two different classes,
+// since an instance of Aggregator will be cloned while being passed to the listener.
+struct Stats {
+    size_t count = 0;
+    std::string data = "";
+};
+
+struct Aggregator {
+    Stats& stats;
+    explicit Aggregator(Stats& stats) : stats(stats) {
+    }
+    void operator()(const SimpleEntry& entry) {
+        std::ostringstream os;
+        os << '[' << stats.count << "]:{" << entry.ikey << ",'" << entry.data << "'}";
+        if (stats.count) {
+            stats.data.append(",");
+        }
+        stats.data.append(os.str());
+        ++stats.count;
+    }
+};
+
 TEST(StreamManagerSmokeTest, SmokeTest) {
     TAILPRODUCE_STATIC_FRAMEWORK_BEGIN(Impl, MockStreamManager<MockDataStorage>);
     TAILPRODUCE_STREAM(test, SimpleEntry, SimpleOrderKey);
@@ -29,12 +51,16 @@ TEST(StreamManagerSmokeTest, SmokeTest) {
         // Mimic the consecutive run(s) that rely on the fact that the stream exists.
         Impl streams_manager(storage, StreamManagerParams());
 
+        Stats stats;
+        auto test_listener_existence_scope = streams_manager.new_scoped_test_listener(Aggregator(stats));
+
         SimpleEntry entry;
 
         typename Impl::test_type::publisher_type publisher(streams_manager.test);
-        typename Impl::test_type::unsafe_listener_type listener_all(streams_manager.test);
-        typename Impl::test_type::unsafe_listener_type listener_from_three(streams_manager.test, SimpleOrderKey(3));
-        typename Impl::test_type::unsafe_listener_type listener_from_three_to_five_not_inclusive(
+        typename Impl::test_type::INTERNAL_unsafe_listener_type listener_all(streams_manager.test);
+        typename Impl::test_type::INTERNAL_unsafe_listener_type listener_from_three(streams_manager.test,
+                                                                                    SimpleOrderKey(3));
+        typename Impl::test_type::INTERNAL_unsafe_listener_type listener_from_three_to_five_not_inclusive(
             streams_manager.test, SimpleOrderKey(3), SimpleOrderKey(5));
 
         ASSERT_FALSE(listener_all.HasData());
@@ -156,6 +182,11 @@ TEST(StreamManagerSmokeTest, SmokeTest) {
 
         ASSERT_FALSE(listener_from_three_to_five_not_inclusive.HasData());
         ASSERT_TRUE(listener_from_three_to_five_not_inclusive.ReachedEnd());
+
+        std::string golden =
+            "[0]:{1,'one'},[1]:{2,'two'},[2]:{3,'three'},[3]:{4,'four'},[4]:{5,'five'},[5]:{6,'six'},[6]:{7,'seven'"
+            "}";
+        ASSERT_EQ(golden, stats.data);
     }
 }
 
@@ -178,17 +209,10 @@ TEST(StreamManagerSmokeTest, DataInjected) {
     {
         // Mimic the consecutive run(s) that rely on the fact that the stream exists.
         Impl streams_manager(storage, StreamManagerParams());
-
-        SimpleEntry entry;
-
-        typename Impl::foo_type::unsafe_listener_type listener(streams_manager.foo);
-
-        ASSERT_TRUE(listener.HasData());
-        ASSERT_FALSE(listener.ReachedEnd());
-
-        listener.ProcessEntrySync([](const SimpleEntry& entry) {
-            EXPECT_EQ(42, entry.ikey);
-            EXPECT_EQ("Yay!", entry.data);
-        });
+        Stats stats;
+        EXPECT_EQ(0, stats.count);
+        auto foo_listener_existence_scope = streams_manager.new_scoped_foo_listener(Aggregator(stats));
+        EXPECT_EQ(1, stats.count);
+        EXPECT_EQ("[0]:{42,'Yay!'}", stats.data);
     }
 }

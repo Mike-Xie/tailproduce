@@ -27,7 +27,6 @@ namespace TailProduce {
     // INTERNAL_UnsafePublisher contains the logic of appending data to the streams
     // and updating their HEAD order keys.
     template <typename T> struct INTERNAL_UnsafePublisher {
-        INTERNAL_UnsafePublisher() = delete;
         explicit INTERNAL_UnsafePublisher(T& stream) : stream(stream) {
         }
 
@@ -70,10 +69,11 @@ namespace TailProduce {
             return stream.head;
         }
 
-      private:
+        T& stream;
+
+        INTERNAL_UnsafePublisher() = delete;
         INTERNAL_UnsafePublisher(const INTERNAL_UnsafePublisher&) = delete;
         void operator=(const INTERNAL_UnsafePublisher&) = delete;
-        T& stream;
     };
 
     // Publisher contains the logic of appending data to the streams and updating their HEAD order keys.
@@ -81,7 +81,6 @@ namespace TailProduce {
     // Each stream should have one and only one Publisher, regardless of whether it is appended to externally
     // or is being populated by a running TailProduce job.
     template <typename T> struct Publisher {
-        Publisher() = delete;
         explicit Publisher(T& stream) : impl(stream) {
         }
         Publisher(Publisher&&) = default;
@@ -91,10 +90,12 @@ namespace TailProduce {
 
         void Push(const typename T::entry_type& entry) {
             impl.Push(entry);
+            impl.stream.subscriptions.PokeAll();
         }
 
         void PushHead(const typename T::order_key_type& order_key) {
             impl.PushHead(order_key);
+            impl.stream.subscriptions.PokeAll();
         }
 
         // TODO: PushSecondaryKey for merge usecases.
@@ -103,9 +104,10 @@ namespace TailProduce {
             return impl.GetHead();
         }
 
-      private:
+        Publisher() = delete;
         Publisher(const Publisher&) = delete;
         void operator=(const Publisher&) = delete;
+
         INTERNAL_UnsafePublisher<T> impl;
     };
 };

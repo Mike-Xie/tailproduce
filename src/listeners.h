@@ -3,36 +3,37 @@
 
 #include <memory>
 #include "stream.h"
+#include "event_subscriber.h"
 
 namespace TailProduce {
-    // UnsafeListener contains the logic of creating and re-creating storage-level read iterators,
+    // TODO(dkorolev): Rename this class.
+    // INTERNAL_UnsafeListener contains the logic of creating and re-creating storage-level read iterators,
     // presenting data in serialized format and keeping track of HEAD order keys.
-    template <typename T> struct UnsafeListener {
-        UnsafeListener() = delete;
-
+    template <typename T> struct INTERNAL_UnsafeListener {
         // Unbounded.
-        ~UnsafeListener() {
-            VLOG(3) << this << ": UnsafeListener::~UnsafeListener();";
+        ~INTERNAL_UnsafeListener() {
+            VLOG(3) << this << ": INTERNAL_UnsafeListener::~INTERNAL_UnsafeListener();";
         }
 
-        UnsafeListener(const T& stream, const typename T::head_pair_type& begin = typename T::head_pair_type())
+        INTERNAL_UnsafeListener(const T& stream,
+                                const typename T::head_pair_type& begin = typename T::head_pair_type())
             : stream(stream),
               storage(stream.manager->storage),
               cursor_key(stream.key_builder.BuildStorageKey(begin)),
               need_to_increment_cursor(false),
               has_end_key(false),
               reached_end(false) {
-            VLOG(3) << this << ": UnsafeListener::UnsafeListener('" << stream.name << "', "
+            VLOG(3) << this << ": INTERNAL_UnsafeListener::INTERNAL_UnsafeListener('" << stream.name << "', "
                     << "begin='" << cursor_key << "');";
         }
-        UnsafeListener(const T& stream, const typename T::order_key_type& begin)
-            : UnsafeListener(stream, std::make_pair(begin, 0)) {
+        INTERNAL_UnsafeListener(const T& stream, const typename T::order_key_type& begin)
+            : INTERNAL_UnsafeListener(stream, std::make_pair(begin, 0)) {
         }
 
         // Bounded.
-        UnsafeListener(const T& stream,
-                       const typename T::head_pair_type& begin,
-                       const typename T::head_pair_type& end)
+        INTERNAL_UnsafeListener(const T& stream,
+                                const typename T::head_pair_type& begin,
+                                const typename T::head_pair_type& end)
             : stream(stream),
               storage(stream.manager->storage),
               cursor_key(stream.key_builder.BuildStorageKey(begin)),
@@ -41,13 +42,11 @@ namespace TailProduce {
               end_key(stream.key_builder.BuildStorageKey(end)),
               reached_end(false) {
         }
-        UnsafeListener(const T& stream,
-                       const typename T::order_key_type& begin,
-                       const typename T::order_key_type& end)
-            : UnsafeListener(stream, std::make_pair(begin, 0), std::make_pair(end, 0)) {
+        INTERNAL_UnsafeListener(const T& stream,
+                                const typename T::order_key_type& begin,
+                                const typename T::order_key_type& end)
+            : INTERNAL_UnsafeListener(stream, std::make_pair(begin, 0), std::make_pair(end, 0)) {
         }
-
-        UnsafeListener(UnsafeListener&&) = default;
 
         const typename T::head_pair_type& GetHead() const {
             return stream.head;
@@ -61,7 +60,7 @@ namespace TailProduce {
         // Can change from false to true if/when new data is available.
         bool HasData() const {
             if (reached_end) {
-                VLOG(3) << this << " UnsafeListener::HasData() = false, due to reached_end = true.";
+                VLOG(3) << this << " INTERNAL_UnsafeListener::HasData() = false, due to reached_end = true.";
                 return false;
             } else {
                 if (!iterator) {
@@ -72,18 +71,19 @@ namespace TailProduce {
                 }
                 if (iterator->Done()) {
                     iterator.reset(nullptr);
-                    VLOG(3) << this << " UnsafeListener::HasData() = false, due to no data in the iterator.";
+                    VLOG(3) << this
+                            << " INTERNAL_UnsafeListener::HasData() = false, due to no data in the iterator.";
                     return false;
                 }
                 assert(iterator && !iterator->Done());
                 if (has_end_key && iterator->Key() >= end_key) {
-                    VLOG(3) << this << " UnsafeListener::HasData() = false, due to reaching the end.";
+                    VLOG(3) << this << " INTERNAL_UnsafeListener::HasData() = false, due to reaching the end.";
                     reached_end = true;
                     iterator.reset(nullptr);
                     return false;
                 } else {
                     // TODO(dkorolev): Handle HEAD going beyond end_key resulting in ReachedEnd().
-                    VLOG(3) << this << " UnsafeListener::HasData() = true.";
+                    VLOG(3) << this << " INTERNAL_UnsafeListener::HasData() = true.";
                     return true;
                 }
             }
@@ -161,8 +161,6 @@ namespace TailProduce {
       private:
         typedef typename T::storage_type storage_type;
         typedef typename T::storage_type::Iterator iterator_type;
-        UnsafeListener(const UnsafeListener&) = delete;
-        void operator=(const UnsafeListener&) = delete;
         const T& stream;
         storage_type& storage;
         ::TailProduce::Storage::KEY_TYPE cursor_key;
@@ -171,6 +169,62 @@ namespace TailProduce {
         ::TailProduce::Storage::KEY_TYPE const end_key;
         mutable bool reached_end;
         mutable std::unique_ptr<iterator_type> iterator;
+
+        INTERNAL_UnsafeListener() = delete;
+        INTERNAL_UnsafeListener(const INTERNAL_UnsafeListener&) = delete;
+        INTERNAL_UnsafeListener(INTERNAL_UnsafeListener&&) = delete;
+        void operator=(const INTERNAL_UnsafeListener&) = delete;
+    };
+
+    // TODO(dkorolev): Add support for other listener types, not just "all" range.
+    template <typename T> struct AsyncListenersFactory {
+        AsyncListenersFactory(const T& stream) : stream(stream) {
+        }
+
+        template <typename T_PROCESSOR> struct AsyncListener : ::TailProduce::Subscriber {
+            AsyncListener(const T& stream, T_PROCESSOR processor)
+                : impl(stream), processor(processor), subscribe(this, stream.subscriptions) {
+                // TODO(dkorolev): Retire this, see the TODO(dkorolev) right above RunFakeEventLoop().
+                RunFakeEventLoop();
+            }
+            virtual ~AsyncListener() {
+            }
+
+            virtual void Poke() override {
+                // TODO(dkorolev): ALARM! This will fail miserably if a stream is appended to as a direct result
+                // of it just being appended to. Async implementation will take care of it.
+                RunFakeEventLoop();
+            }
+
+          private:
+            // TODO(dkorolev): This should be run in a separate thread, C++ style.
+            // Not it effectively is implemented in node.js style, blocking single-threaded.
+            // User-facing coding semantics should not change though, at least for the cases
+            // as simple as the current set of tests.
+            void RunFakeEventLoop() {
+                while (!impl.ReachedEnd() && impl.HasData()) {
+                    impl.ProcessEntrySync(processor);
+                    impl.AdvanceToNextEntry();
+                }
+            }
+
+            INTERNAL_UnsafeListener<T> impl;
+            T_PROCESSOR processor;
+            ::TailProduce::SubscribeWhileInScope<::TailProduce::SubscriptionsManager> subscribe;
+
+            AsyncListener() = delete;
+            AsyncListener(const AsyncListener&) = delete;
+            AsyncListener(AsyncListener&& rhs) = default;
+            void operator=(const AsyncListener&) = delete;
+        };
+
+        template <typename T_PROCESSOR>
+        std::unique_ptr<AsyncListener<T_PROCESSOR>> operator()(T_PROCESSOR processor) {
+            return std::unique_ptr<AsyncListener<T_PROCESSOR>>(new AsyncListener<T_PROCESSOR>(stream, processor));
+        }
+
+      private:
+        const T& stream;
     };
 };
 

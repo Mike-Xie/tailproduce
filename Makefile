@@ -11,7 +11,7 @@ clean:
 cleanall: clean
 	rm -rf leveldb ${LEVELDB_WITH_VERSION} cereal
 
-test: cereal
+test: leveldb/libleveldb.a cereal
 	(make -f Makefile.tailproduce; cd test/cpp && make test)
 
 love: lib test

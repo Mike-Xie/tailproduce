@@ -8,3 +8,7 @@ leveldb-1.15.0/
 cereal/
 .exrc
 **/core
+
+test/leveldbTest/
+
+**/.*.swp

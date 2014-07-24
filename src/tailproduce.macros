@@ -41,7 +41,7 @@
             typedef ORDER_KEY_TYPE order_key_type; \
             typedef ::TailProduce::StreamInstance<entry_type, order_key_type> stream_type; \
             typedef typename captured_base::storage_type storage_type; \
-            typedef ::TailProduce::UnsafeListener<NAME##_type> unsafe_listener_type; \
+            typedef ::TailProduce::INTERNAL_UnsafeListener<NAME##_type> INTERNAL_unsafe_listener_type; \
             typedef ::TailProduce::INTERNAL_UnsafePublisher<NAME##_type> INTERNAL_unsafe_publisher_type; \
             typedef ::TailProduce::Publisher<NAME##_type> publisher_type; \
             typedef std::pair<order_key_type, uint32_t> head_pair_type; \
@@ -52,6 +52,7 @@
             key_builder_type key_builder; \
             head_pair_type head; \
             ::TailProduce::ConfigValues cv = ::TailProduce::ConfigValues("S", "D", "Register", "LastWrite", ':'); \
+            mutable ::TailProduce::SubscriptionsManager subscriptions; \
             NAME##_type( \
                 framework_type* manager, \
                 const char* stream_name, \
@@ -65,7 +66,8 @@
                 manager->streams_declared_.insert(#NAME); \
             } \
         }; \
-        NAME##_type NAME = NAME##_type(this, #NAME, #ENTRY_TYPE, #ORDER_KEY_TYPE)
+        NAME##_type NAME = NAME##_type(this, #NAME, #ENTRY_TYPE, #ORDER_KEY_TYPE); \
+        ::TailProduce::AsyncListenersFactory<NAME##_type> new_scoped_##NAME##_listener = ::TailProduce::AsyncListenersFactory<NAME##_type>(NAME)
 
 #define TAILPRODUCE_PUBLISHER(NAME) \
         struct NAME##_publisher_type : ::TailProduce::Publisher<NAME##_type> { \
